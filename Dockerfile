@@ -1,11 +1,12 @@
 FROM python:3.10-slim
 
 # Install system dependencies and Node.js
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl gnupg make tree git openssh-client\
-    && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends \
+    curl gnupg make tree git openssh-client sudo
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+RUN apt-get install -y nodejs
+RUN rm -rf /var/lib/apt/lists/*
 
 # Create virtualenv and install Python tools
 ENV VENV_PATH=/opt/venv
@@ -17,16 +18,16 @@ RUN python -m venv $VENV_PATH && \
 ENV PATH="$VENV_PATH/bin:$PATH"
 
 # Create non-root user
-ARG USER_GID=1001
-ARG USER_UID=1001
+ARG USERNAME
+ARG GRP_ID
 
-RUN useradd -m -s /bin/bash devuser
-
-# Set working directory
-WORKDIR /app
+RUN groupadd -g 4200 sysadmin2 && \
+    useradd -m -s /bin/bash $USERNAME && \
+    usermod -aG sudo $USERNAME && \
+    echo '$USERNAME ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 # Switch to non-root user
-USER devuser
+USER $USERNAME
 
 # Install global Node.js CLI
 # First, save a list of your existing global packages for later migration

@@ -12,13 +12,15 @@ fi
 set -e
 
 # Default values
+DEFAULT_AGENT="claude-code"
 DEFAULT_PROJECT_NAME="python-claude"
 DEFAULT_HOST_PORT="8000"
-IMAGE_NAME="python-claude-runner:3.10"
+IMAGE_NAME="python-agent-runner:3.10"
 
 # Parse arguments
-PROJECT_NAME=${1:-$DEFAULT_PROJECT_NAME}
-HOST_PORT=${2:-$DEFAULT_HOST_PORT}
+AGENT_NAME=${1:-$DEFAULT_AGENT}
+PROJECT_NAME=${2:-$DEFAULT_PROJECT_NAME}
+HOST_PORT=${3:-$DEFAULT_HOST_PORT}
 CONTAINER_NAME="${PROJECT_NAME}-dev-env"
 
 # Colors for output
@@ -83,6 +85,7 @@ fi
 
 # Create project directory on host if it doesn't exist
 PROJECT_DIR="$(pwd)/$PROJECT_NAME"
+AGENTS_DATA_DIR="$(pwd)/agents"
 if [ ! -d "$PROJECT_DIR" ]; then
     print_status "Creating project directory: $PROJECT_DIR"
     mkdir -p "$PROJECT_DIR"
@@ -107,7 +110,7 @@ SSH_DIR="$HOME/.ssh"
 SSH_MOUNT=""
 if [ -d "$SSH_DIR" ]; then
     print_status "Found SSH directory, mounting for Git authentication"
-    SSH_MOUNT="-v $SSH_DIR:/home/devuser/.ssh:ro"
+    SSH_MOUNT="-v $SSH_DIR:/home/$USERNAME/.ssh:ro"
 else
     print_warning "No SSH directory found at $SSH_DIR"
 fi
@@ -117,7 +120,7 @@ HOME_DIR="$HOME"
 HOME_MOUNT=""
 if [ -d "$HOME_DIR" ]; then
     print_status "Found HOME directory, mounting"
-    HOME_MOUNT="-v $HOME_DIR:/home/devuser"
+    HOME_MOUNT="-v $HOME_DIR:/home/$USERNAME"
 else
     print_warning "No HOME directory found at $HOME_DIR"
 fi
@@ -132,6 +135,7 @@ docker run -it --rm \
     --name "$CONTAINER_NAME" \
     --hostname "$PROJECT_NAME-dev" \
     -v "$PROJECT_DIR:/$PROJECT_NAME" \
+    -v "$AGENTS_DATA_DIR:/agents" \
     $HOME_MOUNT \
     -w /$PROJECT_NAME \
     -p "$HOST_PORT:8000" \
@@ -151,15 +155,9 @@ docker run -it --rm \
         # Create user with host UID and username
         useradd -u \$HOST_USER_ID -g \$HOST_GROUP_ID -s /bin/bash -m -d /home/\$HOST_USERNAME \$HOST_USERNAME 2>/dev/null || {
             echo 'Creating fallback user with UID 1000...'
-            useradd -u 1000 -g 1000 -s /bin/bash -m -d /home/devuser devuser 2>/dev/null || true
-            export HOST_USERNAME=devuser
+            useradd -u 1000 -g 1000 -s /bin/bash -m -d /home/$USERNAME $USERNAME 2>/dev/null || true
+            export HOST_USERNAME=$USERNAME
         }
-
-        # Add user to sudo group if sudo exists
-        if command -v sudo >/dev/null 2>&1; then
-            usermod -aG sudo \$HOST_USERNAME 2>/dev/null || true
-            echo '\$HOST_USERNAME ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers 2>/dev/null || true
-        fi
 
         # Fix git safe directory issue if git exists
         if command -v git >/dev/null 2>&1; then
@@ -172,14 +170,14 @@ docker run -it --rm \
         # Switch to the user
         echo 'Starting development environment as user: '\$HOST_USERNAME
         if command -v sudo >/dev/null 2>&1; then
-            exec sudo -u \$HOST_USERNAME -i bash -c 'cd /$PROJECT_NAME && exec bash'
+            exec sudo -u \$HOST_USERNAME -i bash -c 'ls -al /agents && source /agents/${AGENT_NAME}.sh && cd /$PROJECT_NAME && exec bash'
         else
-            echo 'Sudo not available, running as devuser...'
-            # Fix git safe directory issue for devuser user
+            echo 'Sudo not available, running as $USERNAME...'
+            # Fix git safe directory issue for $USERNAME user
             if command -v git >/dev/null 2>&1; then
                 git config --global --add safe.directory /$PROJECT_NAME 2>/dev/null || true
             fi
-
+            source /agents/${AGENT_NAME}.sh
             exec bash
         fi
     "

@@ -1,5 +1,5 @@
 {
-  "name": "python-claude-runner",
+  "name": "python-agent-runner",
   "version": "1.0.0",
   "description": "Docker-based development environment runner for Python/Node.js projects",
   "main": "run.sh",

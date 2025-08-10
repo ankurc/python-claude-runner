@@ -1,4 +1,4 @@
-# python-claude-runner
+# python-agent-runner
 
 A Docker-based development environment runner that creates isolated, containerized Python/Node.js development environments with Claude Code pre-installed and ready for use.
 
